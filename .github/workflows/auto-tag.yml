@@ -66,15 +66,8 @@ jobs:
     # Step 6: Force-update the tag
     - name: Update tag
       run: |
+        # Force tag update (delete locally and push it to the remote)
         git tag -f ${{ env.new_tag }}
         git push origin -f ${{ env.new_tag }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    # Step 7: Update the release to point to the updated tag
-    - name: Update release to use the new tag
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        release_id=$(gh release view ${{ env.latest }} --json id -q .id)
-        gh release edit $release_id --tag ${{ env.new_tag }}
