@@ -1,9 +1,9 @@
-name: Auto Tag and Release
+name: Auto Increment Tag with Version Logic
 
 on:
   push:
     branches:
-      - main  # Replace with your default branch if different
+      - main  # Adjust for your desired branches
 
 jobs:
   tag-and-release:
@@ -21,23 +21,42 @@ jobs:
     - name: Get the latest tag
       id: get-latest-tag
       run: |
-        latest_tag=$(git describe --tags --abbrev=0 || echo "v0.0.0")
+        # Fetch all tags from the remote
+        git fetch --tags
+        # Find the latest tag or default to v0.0.0
+        latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
         echo "latest=$latest_tag" >> $GITHUB_ENV
 
     - name: Calculate new version
       id: new-tag
       run: |
-        # Increment the version
+        # Extract version components
         latest=${{ env.latest }}
         IFS='.' read -r major minor patch <<< "${latest#v}"
-        new_tag="v$major.$minor.$((patch+1))"
+        
+        # Increment version numbers with logic
+        if [ "$patch" -eq 9 ]; then
+          patch=0
+          if [ "$minor" -eq 99 ]; then
+            minor=0
+            major=$((major+1))
+          else
+            minor=$((minor+1))
+          fi
+        else
+          patch=$((patch+1))
+        fi
+        
+        # Form the new tag
+        new_tag="v$major.$minor.$patch"
         echo "new_tag=$new_tag" >> $GITHUB_ENV
 
-    - name: Create new tag
-      id: create-tag
+    - name: Create and push new tag
       run: |
         git tag ${{ env.new_tag }}
         git push origin ${{ env.new_tag }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Create GitHub release
       uses: actions/create-release@v1
@@ -48,7 +67,3 @@ jobs:
           Automated release created for ${{ env.new_tag }}.
         draft: false
         prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    
