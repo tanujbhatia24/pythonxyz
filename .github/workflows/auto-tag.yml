@@ -1,4 +1,4 @@
-name: Auto Increment Tag and Release
+name: Auto Increment Tag
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - main  # Specify your target branches
 
 jobs:
-  tag-and-release:
+  update-tag:
     runs-on: ubuntu-latest
 
     steps:
@@ -14,7 +14,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
       with:
-        fetch-depth: 0  # Ensure the full repository history is fetched
+        fetch-depth: 0  # Fetch full history to ensure all tags are available
 
     # Step 2: Set up Git
     - name: Set up Git
@@ -24,9 +24,7 @@ jobs:
 
     # Step 3: Fetch all tags
     - name: Fetch all tags
-      run: |
-        git fetch --tags
-        echo "Fetched all tags from the remote repository."
+      run: git fetch --tags
 
     # Step 4: Get the latest tag
     - name: Get the latest tag
@@ -62,27 +60,21 @@ jobs:
 
         # Construct the new version tag
         new_tag="v$major.$minor.$patch"
-
-        # Check if the new tag already exists
-        if git tag --list | grep -q "^$new_tag$"; then
-          echo "Error: The calculated tag $new_tag already exists."
-          exit 1
-        fi
-
         echo "new_tag=$new_tag" >> $GITHUB_ENV
         echo "Calculated new tag: $new_tag"
 
-    # Step 6: Create and push the new tag
-    - name: Create and push new tag
+    # Step 6: Force-update the tag
+    - name: Update tag
       run: |
-        git tag ${{ env.new_tag }}
-        git push origin ${{ env.new_tag }}
+        git tag -f ${{ env.new_tag }}
+        git push origin -f ${{ env.new_tag }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    # Step 7: Create a GitHub release using the `gh` CLI
-    - name: Create GitHub release
+    # Step 7: Update the release to point to the updated tag
+    - name: Update release to use the new tag
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        gh release create ${{ env.new_tag }} --title "Release ${{ env.new_tag }}" --notes "Automated release created for ${{ env.new_tag }}."
+        release_id=$(gh release view ${{ env.latest }} --json id -q .id)
+        gh release edit $release_id --tag ${{ env.new_tag }}
