@@ -1,44 +1,50 @@
-name: Auto Increment Tag with Version Logic
+name: Auto Increment Tag and Release
 
 on:
   push:
     branches:
-      - main  # Adjust for your desired branches
+      - main  # Specify the branches you want to track for tagging (e.g., main, develop)
 
 jobs:
   tag-and-release:
     runs-on: ubuntu-latest
 
     steps:
+    # Step 1: Checkout repository
     - name: Checkout repository
       uses: actions/checkout@v3
 
+    # Step 2: Set up Git
     - name: Set up Git
       run: |
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
 
+    # Step 3: Fetch the latest tag
     - name: Get the latest tag
       id: get-latest-tag
       run: |
-        # Fetch all tags from the remote
+        # Fetch all tags from the remote repository
         git fetch --tags
-        # Find the latest tag or default to v0.0.0
+        # Retrieve the latest tag, or default to v0.0.0 if no tags exist
         latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
         echo "latest=$latest_tag" >> $GITHUB_ENV
 
+    # Step 4: Calculate the next tag
     - name: Calculate new version
       id: new-tag
       run: |
-        # Extract version components
+        # Extract the major, minor, and patch components of the latest tag
         latest=${{ env.latest }}
         IFS='.' read -r major minor patch <<< "${latest#v}"
         
-        # Increment version numbers with logic
+        # Increment the patch number, reset if it reaches 9
         if [ "$patch" -eq 9 ]; then
           patch=0
+          # Increment the minor number, reset if it reaches 99
           if [ "$minor" -eq 99 ]; then
             minor=0
+            # Increment the major number
             major=$((major+1))
           else
             minor=$((minor+1))
@@ -46,11 +52,13 @@ jobs:
         else
           patch=$((patch+1))
         fi
-        
-        # Form the new tag
+
+        # Construct the new version tag
         new_tag="v$major.$minor.$patch"
         echo "new_tag=$new_tag" >> $GITHUB_ENV
+        echo "Calculated new tag: $new_tag"
 
+    # Step 5: Create and push the new tag
     - name: Create and push new tag
       run: |
         git tag ${{ env.new_tag }}
@@ -58,6 +66,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+    # Step 6: Create a GitHub release for the new tag
     - name: Create GitHub release
       uses: actions/create-release@v1
       with:
@@ -67,3 +76,4 @@ jobs:
           Automated release created for ${{ env.new_tag }}.
         draft: false
         prerelease: false
+        token: ${{ secrets.GITHUB_TOKEN }}
